@@ -10,7 +10,6 @@ import (
 
 var (
 	statChannels     = make(chan statData, 1000000) // канал сбора статистики
-	StopChannel      = make(chan int)
 	lockStat         sync.Mutex
 	statCounters     = map[uint32]int64{} // данные по счетчикам
 	nextStatSaveTime int64
@@ -25,6 +24,7 @@ type (
 		StatKeyNames         map[uint32]string  // имена счетчиков в Cacti
 		StatKeyMultipliers   map[uint32]float64 // множители для счетчиков
 		DaemonName           string
+		StopChannel          chan int
 	}
 	statData struct {
 		statType      uint32
@@ -47,6 +47,7 @@ func (g *Grafana) Init() error {
 	if err != nil {
 		return err
 	}
+	g.StopChannel = make(chan int)
 	g.isConnected = true
 	g.StatKeyNames = make(map[uint32]string)
 	g.StatKeyMultipliers = make(map[uint32]float64)
@@ -77,7 +78,7 @@ func (g *Grafana) HandlerStat() {
 	nextStatSaveTime = t + g.StatSaveSecondPeriod - t%g.StatSaveSecondPeriod
 	for {
 		select {
-		case <-StopChannel:
+		case <-g.StopChannel:
 			_ = g.CloseConnection()
 			return
 		case data := <-statChannels:
