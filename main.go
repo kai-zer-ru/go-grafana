@@ -13,6 +13,7 @@ var (
 	lockStat         sync.Mutex
 	statCounters     = map[uint32]int64{} // данные по счетчикам
 	nextStatSaveTime int64
+	saveSecondPeriod int64
 )
 
 type (
@@ -20,7 +21,6 @@ type (
 		Address            string
 		conn               net.Conn
 		isConnected        bool
-		saveSecondPeriod   int64
 		StatKeyNames       map[uint32]string  // имена счетчиков в Cacti
 		StatKeyMultipliers map[uint32]float64 // множители для счетчиков
 		DaemonName         string
@@ -47,7 +47,7 @@ func (g *Grafana) Init() error {
 	if err != nil {
 		return err
 	}
-	g.saveSecondPeriod = 60
+	saveSecondPeriod = 60
 	g.StopChannel = make(chan int)
 	g.isConnected = true
 	g.StatKeyNames = make(map[uint32]string)
@@ -76,7 +76,7 @@ func (g *Grafana) SendValueStatData(statType uint32, value int64, saveValueType 
 
 func (g *Grafana) HandlerStat() {
 	t := time.Now().Unix()
-	nextStatSaveTime = t + g.saveSecondPeriod - t%g.saveSecondPeriod
+	nextStatSaveTime = t + saveSecondPeriod - t%saveSecondPeriod
 	for {
 		select {
 		case <-g.StopChannel:
@@ -132,7 +132,7 @@ func (g *Grafana) saveStat() {
 		}
 	}
 	_ = g.send(fmt.Sprintf("Daemon.%s.%s", g.DaemonName, "IsRunning"), 1)
-	nextStatSaveTime = t + g.saveSecondPeriod - t%g.saveSecondPeriod
+	nextStatSaveTime = t + saveSecondPeriod - t%saveSecondPeriod
 	statCounters = map[uint32]int64{}
 	lockStat.Unlock()
 }
