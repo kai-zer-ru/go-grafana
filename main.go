@@ -17,14 +17,14 @@ var (
 
 type (
 	Grafana struct {
-		Address              string
-		conn                 net.Conn
-		isConnected          bool
-		StatSaveSecondPeriod int64
-		StatKeyNames         map[uint32]string  // имена счетчиков в Cacti
-		StatKeyMultipliers   map[uint32]float64 // множители для счетчиков
-		DaemonName           string
-		StopChannel          chan int
+		Address            string
+		conn               net.Conn
+		isConnected        bool
+		saveSecondPeriod   int64
+		StatKeyNames       map[uint32]string  // имена счетчиков в Cacti
+		StatKeyMultipliers map[uint32]float64 // множители для счетчиков
+		DaemonName         string
+		StopChannel        chan int
 	}
 	statData struct {
 		statType      uint32
@@ -47,6 +47,7 @@ func (g *Grafana) Init() error {
 	if err != nil {
 		return err
 	}
+	g.saveSecondPeriod = 60
 	g.StopChannel = make(chan int)
 	g.isConnected = true
 	g.StatKeyNames = make(map[uint32]string)
@@ -75,7 +76,7 @@ func (g *Grafana) SendValueStatData(statType uint32, value int64, saveValueType 
 
 func (g *Grafana) HandlerStat() {
 	t := time.Now().Unix()
-	nextStatSaveTime = t + g.StatSaveSecondPeriod - t%g.StatSaveSecondPeriod
+	nextStatSaveTime = t + g.saveSecondPeriod - t%g.saveSecondPeriod
 	for {
 		select {
 		case <-g.StopChannel:
@@ -131,7 +132,7 @@ func (g *Grafana) saveStat() {
 		}
 	}
 	_ = g.send(fmt.Sprintf("Daemon.%s.%s", g.DaemonName, "IsRunning"), 1)
-	nextStatSaveTime = t + g.StatSaveSecondPeriod - t%g.StatSaveSecondPeriod
+	nextStatSaveTime = t + g.saveSecondPeriod - t%g.saveSecondPeriod
 	statCounters = map[uint32]int64{}
 	lockStat.Unlock()
 }
