@@ -1,6 +1,5 @@
 package grafana
 
-
 import (
 	"errors"
 	"fmt"
@@ -8,22 +7,24 @@ import (
 	"sync"
 	"time"
 )
+
 var (
-	statChannels              = make(chan statData, 1000000) // канал сбора статистики
-	statStopChannel           = make(chan int)
-	lockStat                  sync.Mutex
-	statCounters              = map[uint32]int64{}           // данные по счетчикам
-	nextStatSaveTime		  int64
+	statChannels     = make(chan statData, 1000000) // канал сбора статистики
+	StopChannel      = make(chan int)
+	lockStat         sync.Mutex
+	statCounters     = map[uint32]int64{} // данные по счетчикам
+	nextStatSaveTime int64
 )
+
 type (
 	Grafana struct {
-		Address string
-		conn net.Conn
-		isConnected bool
+		Address              string
+		conn                 net.Conn
+		isConnected          bool
 		StatSaveSecondPeriod int64
-		StatKeyNames      map[uint32]string          // имена счетчиков в Cacti
-		StatKeyMultipliers map[uint32]float64         // множители для счетчиков
-		DaemonName string
+		StatKeyNames         map[uint32]string  // имена счетчиков в Cacti
+		StatKeyMultipliers   map[uint32]float64 // множители для счетчиков
+		DaemonName           string
 	}
 	statData struct {
 		statType      uint32
@@ -76,7 +77,7 @@ func (g *Grafana) HandlerStat() {
 	nextStatSaveTime = t + g.StatSaveSecondPeriod - t%g.StatSaveSecondPeriod
 	for {
 		select {
-		case <-statStopChannel:
+		case <-StopChannel:
 			_ = g.CloseConnection()
 			return
 		case data := <-statChannels:
