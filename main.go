@@ -13,6 +13,7 @@ var (
 	lockStat         sync.Mutex
 	statCounters     = map[uint32]int64{} // данные по счетчикам
 	nextStatSaveTime int64
+	checkStopChannel chan int
 	saveSecondPeriod int64
 )
 
@@ -20,7 +21,7 @@ type (
 	Grafana struct {
 		Address            string
 		conn               net.Conn
-		isConnected        bool
+		Connected          bool
 		StatKeyNames       map[uint32]string  // имена счетчиков в Cacti
 		StatKeyMultipliers map[uint32]float64 // множители для счетчиков
 		DaemonName         string
@@ -36,7 +37,7 @@ type (
 )
 
 func (g *Grafana) Init() error {
-	if g.isConnected {
+	if g.Connected {
 		return nil
 	}
 	if g.Address == "" {
@@ -49,21 +50,23 @@ func (g *Grafana) Init() error {
 	}
 	saveSecondPeriod = 60
 	g.StopChannel = make(chan int)
-	g.isConnected = true
+	g.Connected = true
 	g.StatKeyNames = make(map[uint32]string)
 	g.StatKeyMultipliers = make(map[uint32]float64)
+	go g.checkConnection()
 	return nil
 }
 
 func (g *Grafana) CloseConnection() error {
-	if g.isConnected {
+	if g.Connected {
+		g.Connected = false
 		return g.conn.Close()
 	}
 	return nil
 }
 
 func (g *Grafana) send(metric string, value uint32) error {
-	if g.isConnected {
+	if g.Connected {
 		_, err := fmt.Fprintf(g.conn, fmt.Sprintf("%s %v %v\n", metric, value, time.Now().Unix()))
 		return err
 	}
@@ -80,6 +83,7 @@ func (g *Grafana) HandlerStat() {
 	for {
 		select {
 		case <-g.StopChannel:
+			checkStopChannel <- 1
 			_ = g.CloseConnection()
 			return
 		case data := <-statChannels:
@@ -135,4 +139,31 @@ func (g *Grafana) saveStat() {
 	nextStatSaveTime = t + saveSecondPeriod - t%saveSecondPeriod
 	statCounters = map[uint32]int64{}
 	lockStat.Unlock()
+}
+
+func (g *Grafana) checkConnection() {
+	for {
+		select {
+		case <-checkStopChannel:
+			_ = g.CloseConnection()
+			return
+		case <-time.After(time.Minute):
+			if g.Connected {
+				err := g.send("", 0)
+				if err != nil {
+					_ = g.CloseConnection()
+					err = g.Init()
+					if err != nil {
+						_ = g.CloseConnection()
+					}
+				}
+			} else {
+				err := g.Init()
+				if err != nil {
+					_ = g.CloseConnection()
+				}
+			}
+		}
+
+	}
 }
